@@ -3,7 +3,6 @@ module Data.HashId.Internal where
 import           Data.Char  (ord, toUpper)
 import           Data.List  (elemIndex, foldl', nub, (\\))
 import           Data.Maybe (fromJust)
-import qualified Data.Text  as T
 
 -- Options for creating encoders
 data HashOptions = HashOptions {
@@ -20,7 +19,7 @@ data HashEncoder = HashEncoder {
   , encMinHashLength :: !Int
   } deriving Show
 
-newtype HashId = HashId { unHashId :: T.Text }
+newtype HashId = HashId { unHashId :: String }
 
 type Alphabet = String
 type Salt = String
@@ -75,10 +74,10 @@ encode = undefined
 decode :: HashEncoder -> HashId -> [Int]
 decode = undefined
 
-parse :: HashEncoder -> T.Text -> Maybe HashId
+parse :: HashEncoder -> String -> Maybe HashId
 parse = undefined
 
-toText :: HashId -> T.Text
+toText :: HashId -> String
 toText = undefined
 
 hash :: Alphabet -> Int -> Hashed

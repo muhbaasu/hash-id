@@ -18,7 +18,7 @@ executable hash-id-tests
   hs-source-dirs:      .
 
   -- depends on the whole project to access the library
-  build-depends:       base >=4.7 && <4.8
+  build-depends:       base >=4.8 && <4.9
                      , hash-id-tests
                      , HUnit
                      , QuickCheck
@@ -35,4 +35,4 @@ library
   hs-source-dirs:      ../src
   exposed-modules:     Data.HashId.Internal
   build-depends:       base
-                     , text
+
