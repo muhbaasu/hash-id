@@ -66,14 +66,15 @@ library
 
 test-suite tests
    type:               exitcode-stdio-1.0
-   hs-source-dirs:     tests
+   hs-source-dirs:     src
+                     , tests
    main-is:            Tests.hs
 
    ghc-options:        -Wall -O0
 
    build-depends:      base >=4.8 && <4.9
-                     , hunit >=1.2
-                     , quickcheck >=2.8
+                     , HUnit >=1.2
+                     , QuickCheck >=2.4 && <2.8
                      , test-framework >=0.8
                      , test-framework-quickcheck2 >=0.3
                      , test-framework-hunit >=0.3
