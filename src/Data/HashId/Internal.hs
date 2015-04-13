@@ -1,7 +1,7 @@
 module Data.HashId.Internal where
 
 import           Data.Char  (ord, toUpper)
-import           Data.List  (elemIndex, foldl', nub, (\\))
+import           Data.List  (elemIndex, foldl', intersect, nub, (\\))
 import           Data.Maybe (fromJust)
 
 -- Options for creating encoders
@@ -13,10 +13,10 @@ data HashOptions = HashOptions {
 -- Necessary data for encoding and decoding
 data HashEncoder = HashEncoder {
     encSalt          :: !Salt
+  , encMinHashLength :: !Int
   , encAlphabet      :: !Alphabet
   , encSeps          :: !Separators
   , encGuards        :: !Guards
-  , encMinHashLength :: !Int
   } deriving Show
 
 newtype HashId = HashId { unHashId :: String }
@@ -65,8 +65,36 @@ mkOptions salt alphabet minLength =
 
 mkEncoder :: HashOptions -> HashEncoder
 mkEncoder (HashOptions salt alphabet minLength) =
-  let x = 5
-  in undefined
+  let seps = defaultSeps `intersect` alphabet
+      alphabet' = alphabet \\ seps
+      seps' = consistentShuffle seps salt
+      divCoeff = fromIntegral (length alphabet) / fromIntegral (length seps')
+      (alphabet'', seps'') =
+        if seps' == "" || divCoeff > sepDiv
+           then let sepsLen = ceiling $ fromIntegral (length alphabet') / sepDiv
+                    sepsLen' = if sepsLen == 1
+                                  then sepsLen + 1
+                                  else sepsLen
+                in if sepsLen' > length seps'
+                      then let diff = sepsLen' - length seps'
+                           in (seps' ++ take diff alphabet', drop diff alphabet')
+                      else (take sepsLen' seps', alphabet')
+           else (alphabet', seps')
+      alphabet''' = consistentShuffle alphabet'' salt
+      guardCount = ceiling $ fromIntegral (length alphabet''') / guardDiv
+      (alphabet'''', seps''', guards) =
+        if length alphabet' < 3
+           then let (guards', seps'''') = splitAt guardCount seps''
+                in (alphabet'', seps'''', guards')
+           else let (guards', alphabet''''') = splitAt guardCount alphabet'''
+                in (alphabet''''', seps'', guards')
+  in HashEncoder salt minLength alphabet'''' seps''' guards
+
+sepDiv :: Double
+sepDiv = 3.5
+
+guardDiv :: Double
+guardDiv = 12
 
 encode :: HashEncoder -> [Int] -> HashId
 encode = undefined
@@ -78,7 +106,7 @@ parse :: HashEncoder -> String -> Maybe HashId
 parse = undefined
 
 toText :: HashId -> String
-toText = undefined
+toText = unHashId
 
 hash :: Alphabet -> Int -> Hashed
 hash alphabet num = hash' num alphabet ""
