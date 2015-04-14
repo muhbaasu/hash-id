@@ -69,7 +69,7 @@ mkEncoder (HashOptions salt alphabet minLength) =
       alphabet' = alphabet \\ seps
       seps' = consistentShuffle seps salt
       divCoeff = fromIntegral (length alphabet) / fromIntegral (length seps')
-      (alphabet'', seps'') =
+      (seps'', alphabet'') =
         if seps' == "" || divCoeff > sepDiv
            then let sepsLen = ceiling $ fromIntegral (length alphabet') / sepDiv
                     sepsLen' = if sepsLen == 1
