@@ -97,8 +97,69 @@ sepDiv = 3.5
 guardDiv :: Double
 guardDiv = 12
 
+type ReturnVal = String
+
 encode :: HashEncoder -> [Int] -> HashId
-encode = undefined
+encode (HashEncoder salt minLength alphabet seps guards) nums =
+  let hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
+      ret = alphabet !! (hash' `mod` length alphabet)
+      (alphabet', retVal) = encodeStep1 ret alphabet salt seps nums
+      retVal' = encodeStep2 hash' guards minLength retVal
+      retVal'' = encodeStep3 alphabet' minLength retVal'
+  in HashId retVal''
+
+encodeStep1 :: Char
+                -> Alphabet
+                -> Salt
+                -> Separators
+                -> [Int]
+                -> (Alphabet, ReturnVal)
+encodeStep1 char alphabet salt seps nums =
+  foldl' foldStep (alphabet, [char]) ns
+  where ns = zip [0..] nums
+        foldStep (alphabet', retVal) (i, n) =
+          let buffer = char : salt ++ alphabet'
+              alphabet'' = consistentShuffle alphabet' $
+                           take (length alphabet') buffer
+              lastC = hash alphabet'' n
+              retVal' = retVal ++ lastC
+              retVal'' = if i + 1 < length nums
+                            then
+                              let n' = n `mod` ord (head lastC) + i
+                                  sepsIndex = n' `mod` length seps
+                              in retVal' ++ [seps !! sepsIndex]
+                            else retVal'
+          in (alphabet'', retVal'')
+
+encodeStep2 :: Int -> Guards -> Int -> ReturnVal -> ReturnVal
+encodeStep2 hash' guards minLength retVal =
+  if length retVal < minLength
+     then
+       let guardIndex = hash' + ord (head retVal)
+           guard = guards !! guardIndex
+           retVal' = guard:retVal
+       in if length retVal' < minLength
+             then
+               let guardIndex' = (hash' + ord (retVal' !! 2)) `mod` length guards
+                   guard' = guards !! guardIndex'
+               in retVal' ++ [guard']
+             else retVal'
+     else retVal
+
+encodeStep3 :: Alphabet -> Int -> ReturnVal -> ReturnVal
+encodeStep3 alphabet minLength retVal =
+  if length retVal < minLength
+     then
+       let alphabet' = consistentShuffle alphabet alphabet
+           retVal' = drop halfLen alphabet' ++ retVal ++ take halfLen alphabet'
+           excess = length retVal' - minLength
+           retVal'' = if excess > 0
+                         then let startPos = excess `div` 2
+                              in take (startPos + minLength) $ drop startPos retVal'
+                         else retVal'
+       in encodeStep3 alphabet' minLength retVal''
+     else retVal
+  where halfLen = length alphabet `div` 2
 
 decode :: HashEncoder -> HashId -> [Int]
 decode = undefined
