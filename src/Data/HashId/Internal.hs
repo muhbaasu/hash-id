@@ -77,13 +77,14 @@ mkEncoder (HashOptions salt alphabet minLength) =
                                   else sepsLen
                 in if sepsLen' > length seps'
                       then let diff = sepsLen' - length seps'
-                           in (seps' ++ take diff alphabet', drop diff alphabet')
+                               (fstAlpha, sndAlpha) = splitAt diff alphabet'
+                           in (seps' ++ fstAlpha, sndAlpha)
                       else (take sepsLen' seps', alphabet')
            else (alphabet', seps')
       alphabet''' = consistentShuffle alphabet'' salt
       guardCount = ceiling $ fromIntegral (length alphabet''') / guardDiv
       (alphabet'''', seps''', guards) =
-        if length alphabet' < 3
+        if length alphabet'' < 3
            then let (guards', seps'''') = splitAt guardCount seps''
                 in (alphabet'', seps'''', guards')
            else let (guards', alphabet''''') = splitAt guardCount alphabet'''
