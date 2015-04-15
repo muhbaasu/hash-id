@@ -2,7 +2,7 @@ module Data.HashId.Internal where
 
 import           Data.Char  (ord, toUpper)
 import           Data.List  (elemIndex, foldl', intersect, nub, (\\))
-import           Data.Maybe (fromJust)
+import           Data.Maybe (fromMaybe)
 
 -- Options for creating encoders
 data HashOptions = HashOptions {
@@ -162,10 +162,29 @@ encodeStep3 alphabet minLength retVal =
   where halfLen = length alphabet `div` 2
 
 decode :: HashEncoder -> HashId -> [Int]
-decode = undefined
+decode enc@(HashEncoder salt _ alphabet seps guards) hashId =
+  let hashBreakdown = words $ map (toSpace guards) $ unHashId hashId
+      i = if length hashBreakdown `elem` [2, 3] then 1 else 0
+      hashBreakdown' = hashBreakdown !! i
+      lottery = head hashBreakdown'
+      hashBreakdown'' = words $ map (toSpace seps) $ tail hashBreakdown'
+      ret = fst $ foldl' (collectVals lottery) ([], alphabet) hashBreakdown''
+  in if unHashId (encode enc ret) == unHashId hashId
+        then ret
+        else []
+  where toSpace elems c =
+          if c `elem` elems
+             then ' '
+             else c
+        collectVals lottery' (vals, alphabet') subhash =
+          let buffer = lottery' : salt ++ alphabet'
+              alphabet'' = consistentShuffle alphabet'
+                           $ take (length alphabet') buffer
+              val = unhash alphabet'' subhash
+          in (vals ++ [val], alphabet'')
 
 parse :: HashEncoder -> String -> Maybe HashId
-parse = undefined
+parse _ s = Just $ HashId s
 
 toText :: HashId -> String
 toText = unHashId
@@ -187,8 +206,10 @@ unhash alphabet hash' = unhash' 0 0
       if i >= length hash'
          then num
          else let cur = hash' !! i
-                  pos = fromJust $ elemIndex cur alphabet
-                  num' = num + pos * (length alphabet ^ (length hash' - i - 1))
+                  pos = fromMaybe (-1) $ elemIndex cur alphabet
+                  hashLen = length hash'
+                  power = length alphabet ^ (hashLen - i - 1)
+                  num' = num + pos * power
               in unhash' (i + 1) num'
 
 consistentShuffle :: Alphabet -> Salt -> Alphabet
