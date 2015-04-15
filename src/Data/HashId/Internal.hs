@@ -19,7 +19,7 @@ data HashEncoder = HashEncoder {
   , encGuards        :: !Guards
   } deriving Show
 
-newtype HashId = HashId { unHashId :: String }
+newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
 
 type Alphabet = String
 type Salt = String
