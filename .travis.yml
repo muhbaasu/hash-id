@@ -13,4 +13,4 @@ install:
   - travis_retry cabal update
 
 script:
-  - cabal configure --enable-tests && cabal build && cabal test
+  - cabal install --enable-tests && cabal configure --enable-tests && cabal build && cabal test
