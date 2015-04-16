@@ -11,6 +11,8 @@ install:
   - cabal --version
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
   - travis_retry cabal update
+  - cabal install --enable-tests
+  - cabal configure --enable-tests
 
 script:
-  - cabal install --enable-tests && cabal configure --enable-tests && cabal build && cabal test
+  - cabal build && cabal test
