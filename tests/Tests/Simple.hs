@@ -13,13 +13,15 @@ consistentShuffleABC1 :: Assertion
 consistentShuffleABC1 =
   s @=? shuffled
   where s = "cUpI6isqCa0brWZnJA8wNTzDHEtLXOYgh5fQm2uRj4deM91oB7FkSGKxvyVP3l"
-        shuffled = HI.consistentShuffle HI.defaultAlphabet $ HI.Salt "abc1"
+        shuffled = HI.consistentShuffle
+                   (HI.unAlpha HI.defaultAlphabet) $ HI.Salt "abc1"
 
 consistentShuffleABC2 :: Assertion
 consistentShuffleABC2 =
   s @=? shuffled
   where s = "tRvkhHx0ZefcF46YuaAqGLDKgM1W5Vp2T8n9s7BSoCjiQOdrEbJmUINywzXP3l"
-        shuffled = HI.consistentShuffle HI.defaultAlphabet $ HI.Salt "abc2"
+        shuffled = HI.consistentShuffle
+                   (HI.unAlpha HI.defaultAlphabet) $ HI.Salt "abc2"
 
 encodeNumber :: Assertion
 encodeNumber = let options = HI.defaultOptions $ HI.Salt "this is my salt"

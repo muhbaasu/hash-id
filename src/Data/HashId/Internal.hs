@@ -23,8 +23,8 @@ data HashEncoder = HashEncoder {
 newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
 newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
 newtype MinLength = MinLength { unMinLength :: Int } deriving (Show, Eq)
+newtype Alphabet = Alphabet { unAlpha :: String } deriving (Show, Eq)
 
-type Alphabet = String
 type Separators = String
 type Guards = String
 type Hashed = String
@@ -35,7 +35,19 @@ minLength l | l < 0 = Left ""
 minLength l = Right $ MinLength l
 
 satisfiesLength :: MinLength -> Int -> Bool
-satisfiesLength (MinLength minLen) l = l >= minLen
+satisfiesLength (MinLength minLen) = (<=) minLen
+
+alphabet :: String -> Either Error Alphabet
+alphabet a =
+  case sanitize a of
+    a' | length a' < minAlphabetLength ->
+           Left $ "Alphabet must contain at least " ++
+             show minAlphabetLength ++ " unique characters"
+    a' -> Right $ Alphabet a'
+  where sanitize = filter (' ' /=) . nub
+
+minAlphabetLength :: Int
+minAlphabetLength = 16
 
 -- TODO
 salt :: String -> Either Error Salt
@@ -43,7 +55,7 @@ salt = undefined
 
 defaultAlphabet :: Alphabet
 defaultAlphabet =
-  concat [
+  Alphabet $ concat [
     ['a'..'z']
   , ['A'..'Z']
   , ['1'..'9']
@@ -59,25 +71,17 @@ defaultMinHashLength = MinLength 0
 
 defaultOptions :: Salt -> HashOptions
 defaultOptions salt' =
-  case mkOptions salt' defaultAlphabet defaultMinHashLength of
-    Right opt -> opt
-    Left err -> error err -- library failure
+  HashOptions salt' defaultAlphabet defaultMinHashLength
 
-mkOptions :: Salt -> Alphabet -> MinLength -> Either Error HashOptions
-mkOptions salt' alphabet minLen =
-  if length alphabet' < minAlphabetLength
-     then Left $ "Alphabet must contain at least "
-                 ++ show minAlphabetLength ++ " unique characters"
-     else Right $ HashOptions salt' alphabet' minLen
-  where minAlphabetLength = 16
-        alphabet' = filter (/= ' ') $ nub alphabet
+options :: Salt -> Alphabet -> MinLength -> HashOptions
+options = HashOptions
 
 mkEncoder :: HashOptions -> HashEncoder
-mkEncoder (HashOptions salt' alphabet minLen) =
-  let seps = defaultSeps `intersect` alphabet
-      alphabet' = alphabet \\ seps
+mkEncoder (HashOptions salt' (Alphabet alpha) minLen) =
+  let seps = defaultSeps `intersect` alpha
+      alphabet' = alpha \\ seps
       seps' = consistentShuffle seps salt'
-      divCoeff = fromIntegral (length alphabet) / fromIntegral (length seps')
+      divCoeff = fromIntegral (length alpha) / fromIntegral (length seps')
       (seps'', alphabet'') =
         if seps' == "" || divCoeff > sepDiv
            then let sepsLen = ceiling $ fromIntegral (length alphabet') / sepDiv
@@ -98,7 +102,7 @@ mkEncoder (HashOptions salt' alphabet minLen) =
                 in (alphabet'', seps'''', guards')
            else let (guards', alphabet''''') = splitAt guardCount alphabet'''
                 in (alphabet''''', seps'', guards')
-  in HashEncoder salt' minLen alphabet'''' seps''' guards
+  in HashEncoder salt' minLen (Alphabet alphabet'''') seps''' guards
 
 sepDiv :: Double
 sepDiv = 3.5
@@ -109,10 +113,10 @@ guardDiv = 12
 type ReturnVal = String
 
 encode :: HashEncoder -> [Int] -> HashId
-encode (HashEncoder salt' minLen alphabet seps guards) nums =
+encode (HashEncoder salt' minLen a@(Alphabet alpha) seps guards) nums =
   let hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
-      ret = alphabet !! (hash' `mod` length alphabet)
-      (alphabet', retVal) = encodeStep1 ret alphabet salt' seps nums
+      ret = alpha !! (hash' `mod` length alpha)
+      (alphabet', retVal) = encodeStep1 ret a salt' seps nums
       retVal' = encodeStep2 hash' guards minLen retVal
       retVal'' = encodeStep3 alphabet' minLen retVal'
   in HashId retVal''
@@ -123,14 +127,14 @@ encodeStep1 :: Char
                 -> Separators
                 -> [Int]
                 -> (Alphabet, ReturnVal)
-encodeStep1 char alphabet salt' seps nums =
-  foldl' foldStep (alphabet, [char]) ns
+encodeStep1 char alpha salt' seps nums =
+  foldl' foldStep (alpha, [char]) ns
   where ns = zip [0..] nums
-        foldStep (alphabet', retVal) (i, n) =
-          let buffer = char : unSalt salt' ++ alphabet'
-              alphabet'' = consistentShuffle alphabet' $ Salt
-                           $ take (length alphabet') buffer
-              lastC = hash alphabet'' n
+        foldStep ((Alphabet alpha'), retVal) (i, n) =
+          let buffer = char : unSalt salt' ++ alpha'
+              alphabet'' = consistentShuffle alpha' $ Salt
+                           $ take (length alpha') buffer
+              lastC = hash (Alphabet alphabet'') n
               retVal' = retVal ++ lastC
               retVal'' = if i + 1 < length nums
                             then
@@ -138,7 +142,7 @@ encodeStep1 char alphabet salt' seps nums =
                                   sepsIndex = n' `mod` length seps
                               in retVal' ++ [seps !! sepsIndex]
                             else retVal'
-          in (alphabet'', retVal'')
+          in ((Alphabet alphabet''), retVal'')
 
 encodeStep2 :: Int -> Guards -> MinLength -> ReturnVal -> ReturnVal
 encodeStep2 hash' guards minLen retVal =
@@ -156,29 +160,29 @@ encodeStep2 hash' guards minLen retVal =
                in retVal' ++ [guard']
 
 encodeStep3 :: Alphabet -> MinLength -> ReturnVal -> ReturnVal
-encodeStep3 alphabet minLen retVal =
+encodeStep3 (Alphabet alpha) minLen retVal =
   if satisfiesLength minLen $ length retVal
      then retVal
      else
-       let alphabet' = consistentShuffle alphabet $ Salt alphabet
-           retVal' = drop halfLen alphabet' ++ retVal ++ take halfLen alphabet'
+       let alpha' = consistentShuffle alpha $ Salt alpha
+           retVal' = drop halfLen alpha' ++ retVal ++ take halfLen alpha'
            excess = length retVal' - unMinLength minLen
            retVal'' = if excess > 0
                          then let startPos = excess `div` 2
                               in take (startPos + unMinLength minLen)
                                  $ drop startPos retVal'
                          else retVal'
-       in encodeStep3 alphabet' minLen retVal''
-  where halfLen = length alphabet `div` 2
+       in encodeStep3 (Alphabet alpha') minLen retVal''
+  where halfLen = length alpha `div` 2
 
 decode :: HashEncoder -> HashId -> [Int]
-decode enc@(HashEncoder salt' _ alphabet seps guards) hashId =
+decode enc@(HashEncoder salt' _ (Alphabet alpha) seps guards) hashId =
   let hashBreakdown = words $ map (toSpace guards) $ unHashId hashId
       i = if length hashBreakdown `elem` [2, 3] then 1 else 0
       hashBreakdown' = hashBreakdown !! i
       lottery = head hashBreakdown'
       hashBreakdown'' = words $ map (toSpace seps) $ tail hashBreakdown'
-      ret = fst $ foldl' (collectVals lottery) ([], alphabet) hashBreakdown''
+      ret = fst $ foldl' (collectVals lottery) ([], alpha) hashBreakdown''
   in if unHashId (encode enc ret) == unHashId hashId
         then ret
         else []
@@ -190,7 +194,7 @@ decode enc@(HashEncoder salt' _ alphabet seps guards) hashId =
           let buffer = lottery' : unSalt salt' ++ alphabet'
               alphabet'' = consistentShuffle alphabet' $ Salt
                            $ take (length alphabet') buffer
-              val = unhash alphabet'' subhash
+              val = unhash (Alphabet alphabet'') subhash
           in (vals ++ [val], alphabet'')
 
 parse :: HashEncoder -> String -> Maybe HashId
@@ -200,7 +204,7 @@ toText :: HashId -> String
 toText = unHashId
 
 hash :: Alphabet -> Int -> Hashed
-hash alphabet num = hash' num alphabet ""
+hash (Alphabet alpha) num = hash' num alpha ""
   where
     hash' i a output =
       if i > 0
@@ -210,29 +214,29 @@ hash alphabet num = hash' num alphabet ""
       else output
 
 unhash :: Alphabet -> Hashed -> Int
-unhash alphabet hash' = unhash' 0 0
+unhash (Alphabet alpha) hash' = unhash' 0 0
   where
     unhash' i num =
       if i >= length hash'
          then num
          else let cur = hash' !! i
-                  pos = fromMaybe (-1) $ elemIndex cur alphabet
+                  pos = fromMaybe (-1) $ elemIndex cur alpha
                   hashLen = length hash'
-                  power = length alphabet ^ (hashLen - i - 1)
+                  power = length alpha ^ (hashLen - i - 1)
                   num' = num + pos * power
               in unhash' (i + 1) num'
 
-consistentShuffle :: Alphabet -> Salt -> Alphabet
-consistentShuffle alphabet (Salt salt') =
-  fst $ foldl' shuffleStep (alphabet, 0) $ zip is vs
+consistentShuffle :: String -> Salt -> String
+consistentShuffle alpha (Salt salt') =
+  fst $ foldl' shuffleStep (alpha, 0) $ zip is vs
   where
     vs = cycle [0..(length salt'-1)]
-    is = [(length alphabet-1), (length alphabet-2)..1]
-    shuffleStep (alphabet', p) (i, v) =
+    is = [(length alpha-1), (length alpha-2)..1]
+    shuffleStep (alpha', p) (i, v) =
       let ascVal = ord $ salt' !! v
           p' = p + ascVal
           j = (ascVal + v + p') `mod` i
-      in (swapAt i j alphabet', p')
+      in (swapAt i j alpha', p')
 
 replaceAt :: a -> Int -> [a] -> [a]
 replaceAt x ix xs = take (ix-1) xs ++ [x] ++ drop ix xs

@@ -18,12 +18,15 @@ instance Arbitrary HI.Salt where
 saltGen :: Int -> Gen String
 saltGen minSize = sized $ \n ->
   do k <- choose (minSize, minSize `max` n)
-     vectorOf k $ elements HI.defaultAlphabet
+     vectorOf k $ elements $ HI.unAlpha $ HI.defaultAlphabet
 
 instance Arbitrary HI.HashEncoder where
   arbitrary = do
     salt <- arbitrary
     return $ HI.mkEncoder $ HI.defaultOptions salt
+
+instance Arbitrary HI.Alphabet where
+  arbitrary = return HI.defaultAlphabet
 
 prop_idempotent_encode :: HI.HashEncoder -> [Int] -> Bool
 prop_idempotent_encode enc nums = HI.encode enc nums == HI.encode enc nums
