@@ -10,8 +10,13 @@ import           Test.QuickCheck
 
 instance Arbitrary HI.Salt where
   arbitrary = do
-    salt' <- listOf1 arbitrary
+    salt' <- saltGen 4
     return $ HI.Salt salt'
+
+saltGen :: Int -> Gen String
+saltGen minSize = sized $ \n ->
+  do k <- choose (minSize, minSize `max` n)
+     vectorOf k $ elements HI.defaultAlphabet
 
 instance Arbitrary HI.HashEncoder where
   arbitrary = do
