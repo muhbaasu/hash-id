@@ -30,9 +30,9 @@ type Guards = String
 type Hashed = String
 type Error = String
 
--- TODO
 minLength :: Int -> Either Error MinLength
-minLength = undefined
+minLength l | l < 0 = Left ""
+minLength l = Right $ MinLength l
 
 satisfiesLength :: MinLength -> Int -> Bool
 satisfiesLength (MinLength minLen) l = l >= minLen
