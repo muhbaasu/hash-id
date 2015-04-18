@@ -8,6 +8,11 @@ import qualified Test.Framework                       as F
 import qualified Test.Framework.Providers.QuickCheck2 as F
 import           Test.QuickCheck
 
+instance Arbitrary HI.Salt where
+  arbitrary = do
+    salt' <- listOf1 arbitrary
+    return $ HI.Salt salt'
+
 instance Arbitrary HI.HashEncoder where
   arbitrary = do
     salt <- arbitrary

@@ -20,14 +20,18 @@ data HashEncoder = HashEncoder {
   } deriving Show
 
 newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
+newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
 
 type Alphabet = String
-type Salt = String
 type Separators = String
 type Guards = String
 type Hashed = String
 type MinLength = Int
 type OptionErrors = String
+
+-- TODO
+salt :: String -> Either String Salt
+salt = undefined
 
 defaultAlphabet :: Alphabet
 defaultAlphabet =
@@ -46,17 +50,17 @@ defaultMinHashLength :: Int
 defaultMinHashLength = 0
 
 defaultOptions :: Salt -> HashOptions
-defaultOptions salt =
-  case mkOptions salt defaultAlphabet defaultMinHashLength of
+defaultOptions salt' =
+  case mkOptions salt' defaultAlphabet defaultMinHashLength of
     Right opt -> opt
     Left err -> error err -- library failure
 
 mkOptions :: Salt -> Alphabet -> MinLength -> Either OptionErrors HashOptions
-mkOptions salt alphabet minLength =
+mkOptions salt' alphabet minLength =
   if length alphabet' < minAlphabetLength
      then Left $ "Alphabet must contain at least "
                  ++ show minAlphabetLength ++ " unique characters"
-     else Right $ HashOptions salt alphabet' minLength'
+     else Right $ HashOptions salt' alphabet' minLength'
   where minAlphabetLength = 16
         alphabet' = filter (/= ' ') $ nub alphabet
         minLength' = if minLength < 0
@@ -64,10 +68,10 @@ mkOptions salt alphabet minLength =
                         else minLength
 
 mkEncoder :: HashOptions -> HashEncoder
-mkEncoder (HashOptions salt alphabet minLength) =
+mkEncoder (HashOptions salt' alphabet minLength) =
   let seps = defaultSeps `intersect` alphabet
       alphabet' = alphabet \\ seps
-      seps' = consistentShuffle seps salt
+      seps' = consistentShuffle seps salt'
       divCoeff = fromIntegral (length alphabet) / fromIntegral (length seps')
       (seps'', alphabet'') =
         if seps' == "" || divCoeff > sepDiv
@@ -81,7 +85,7 @@ mkEncoder (HashOptions salt alphabet minLength) =
                            in (seps' ++ fstAlpha, sndAlpha)
                       else (take sepsLen' seps', alphabet')
            else (alphabet', seps')
-      alphabet''' = consistentShuffle alphabet'' salt
+      alphabet''' = consistentShuffle alphabet'' salt'
       guardCount = ceiling $ fromIntegral (length alphabet''') / guardDiv
       (alphabet'''', seps''', guards) =
         if length alphabet'' < 3
@@ -89,7 +93,7 @@ mkEncoder (HashOptions salt alphabet minLength) =
                 in (alphabet'', seps'''', guards')
            else let (guards', alphabet''''') = splitAt guardCount alphabet'''
                 in (alphabet''''', seps'', guards')
-  in HashEncoder salt minLength alphabet'''' seps''' guards
+  in HashEncoder salt' minLength alphabet'''' seps''' guards
 
 sepDiv :: Double
 sepDiv = 3.5
@@ -100,10 +104,10 @@ guardDiv = 12
 type ReturnVal = String
 
 encode :: HashEncoder -> [Int] -> HashId
-encode (HashEncoder salt minLength alphabet seps guards) nums =
+encode (HashEncoder salt' minLength alphabet seps guards) nums =
   let hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
       ret = alphabet !! (hash' `mod` length alphabet)
-      (alphabet', retVal) = encodeStep1 ret alphabet salt seps nums
+      (alphabet', retVal) = encodeStep1 ret alphabet salt' seps nums
       retVal' = encodeStep2 hash' guards minLength retVal
       retVal'' = encodeStep3 alphabet' minLength retVal'
   in HashId retVal''
@@ -114,13 +118,13 @@ encodeStep1 :: Char
                 -> Separators
                 -> [Int]
                 -> (Alphabet, ReturnVal)
-encodeStep1 char alphabet salt seps nums =
+encodeStep1 char alphabet salt' seps nums =
   foldl' foldStep (alphabet, [char]) ns
   where ns = zip [0..] nums
         foldStep (alphabet', retVal) (i, n) =
-          let buffer = char : salt ++ alphabet'
-              alphabet'' = consistentShuffle alphabet' $
-                           take (length alphabet') buffer
+          let buffer = char : (unSalt salt') ++ alphabet'
+              alphabet'' = consistentShuffle alphabet' $ Salt
+                           $ take (length alphabet') buffer
               lastC = hash alphabet'' n
               retVal' = retVal ++ lastC
               retVal'' = if i + 1 < length nums
@@ -150,7 +154,7 @@ encodeStep3 :: Alphabet -> Int -> ReturnVal -> ReturnVal
 encodeStep3 alphabet minLength retVal =
   if length retVal < minLength
      then
-       let alphabet' = consistentShuffle alphabet alphabet
+       let alphabet' = consistentShuffle alphabet $ Salt alphabet
            retVal' = drop halfLen alphabet' ++ retVal ++ take halfLen alphabet'
            excess = length retVal' - minLength
            retVal'' = if excess > 0
@@ -162,7 +166,7 @@ encodeStep3 alphabet minLength retVal =
   where halfLen = length alphabet `div` 2
 
 decode :: HashEncoder -> HashId -> [Int]
-decode enc@(HashEncoder salt _ alphabet seps guards) hashId =
+decode enc@(HashEncoder salt' _ alphabet seps guards) hashId =
   let hashBreakdown = words $ map (toSpace guards) $ unHashId hashId
       i = if length hashBreakdown `elem` [2, 3] then 1 else 0
       hashBreakdown' = hashBreakdown !! i
@@ -177,8 +181,8 @@ decode enc@(HashEncoder salt _ alphabet seps guards) hashId =
              then ' '
              else c
         collectVals lottery' (vals, alphabet') subhash =
-          let buffer = lottery' : salt ++ alphabet'
-              alphabet'' = consistentShuffle alphabet'
+          let buffer = lottery' : unSalt salt' ++ alphabet'
+              alphabet'' = consistentShuffle alphabet' $ Salt
                            $ take (length alphabet') buffer
               val = unhash alphabet'' subhash
           in (vals ++ [val], alphabet'')
@@ -213,13 +217,13 @@ unhash alphabet hash' = unhash' 0 0
               in unhash' (i + 1) num'
 
 consistentShuffle :: Alphabet -> Salt -> Alphabet
-consistentShuffle alphabet salt =
+consistentShuffle alphabet (Salt salt') =
   fst $ foldl' shuffleStep (alphabet, 0) $ zip is vs
   where
-    vs = cycle [0..(length salt-1)]
+    vs = cycle [0..(length salt'-1)]
     is = [(length alphabet-1), (length alphabet-2)..1]
     shuffleStep (alphabet', p) (i, v) =
-      let ascVal = ord $ salt !! v
+      let ascVal = ord $ salt' !! v
           p' = p + ascVal
           j = (ascVal + v + p') `mod` i
       in (swapAt i j alphabet', p')

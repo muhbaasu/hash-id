@@ -11,16 +11,18 @@ import           Test.HUnit
 
 consistentShuffleABC1 :: Assertion
 consistentShuffleABC1 =
-  s @=? HI.consistentShuffle HI.defaultAlphabet "abc2"
+  s @=? shuffled
   where s = "cUpI6isqCa0brWZnJA8wNTzDHEtLXOYgh5fQm2uRj4deM91oB7FkSGKxvyVP3l"
+        shuffled = HI.consistentShuffle HI.defaultAlphabet $ HI.Salt "abc1"
 
 consistentShuffleABC2 :: Assertion
 consistentShuffleABC2 =
-  s @=? HI.consistentShuffle HI.defaultAlphabet "abc2"
+  s @=? shuffled
   where s = "tRvkhHx0ZefcF46YuaAqGLDKgM1W5Vp2T8n9s7BSoCjiQOdrEbJmUINywzXP3l"
+        shuffled = HI.consistentShuffle HI.defaultAlphabet $ HI.Salt "abc2"
 
 encodeNumber :: Assertion
-encodeNumber = let options = HI.defaultOptions "this is my salt"
+encodeNumber = let options = HI.defaultOptions $ HI.Salt "this is my salt"
                    encoder = HI.mkEncoder options
                    hid = HI.encode encoder [12345]
                    expected = "NkK9"
@@ -28,7 +30,7 @@ encodeNumber = let options = HI.defaultOptions "this is my salt"
                in expected @=? result
 
 decodeNumber :: Assertion
-decodeNumber = let options = HI.defaultOptions "this is my salt"
+decodeNumber = let options = HI.defaultOptions $ HI.Salt "this is my salt"
                    encoder = HI.mkEncoder options
                    hid = fromJust $ HI.parse encoder "NkK9"
                    expected = [12345]
@@ -41,4 +43,4 @@ tests =
   [ F.testCase "Encode number" encodeNumber
   , F.testCase "Decode number" decodeNumber
   , F.testCase "Shuffle with salt abc1" consistentShuffleABC1
-  , F.testCase "Shuffel with salt abc2" consistentShuffleABC2 ]
+  , F.testCase "Shuffle with salt abc2" consistentShuffleABC2 ]
