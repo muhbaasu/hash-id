@@ -11,13 +11,13 @@ import           Test.HUnit
 
 consistentShuffleABC1 :: Assertion
 consistentShuffleABC1 =
-  let shuffled = HI.consistentShuffle HI.defaultAlphabet "abc1"
-  in "cUpI6isqCa0brWZnJA8wNTzDHEtLXOYgh5fQm2uRj4deM91oB7FkSGKxvyVP3l" @=? shuffled
+  s @=? HI.consistentShuffle HI.defaultAlphabet "abc2"
+  where s = "cUpI6isqCa0brWZnJA8wNTzDHEtLXOYgh5fQm2uRj4deM91oB7FkSGKxvyVP3l"
 
 consistentShuffleABC2 :: Assertion
 consistentShuffleABC2 =
-  let shuffled = HI.consistentShuffle HI.defaultAlphabet "abc2"
-  in "tRvkhHx0ZefcF46YuaAqGLDKgM1W5Vp2T8n9s7BSoCjiQOdrEbJmUINywzXP3l" @=? shuffled
+  s @=? HI.consistentShuffle HI.defaultAlphabet "abc2"
+  where s = "tRvkhHx0ZefcF46YuaAqGLDKgM1W5Vp2T8n9s7BSoCjiQOdrEbJmUINywzXP3l"
 
 encodeNumber :: Assertion
 encodeNumber = let options = HI.defaultOptions "this is my salt"
@@ -26,6 +26,7 @@ encodeNumber = let options = HI.defaultOptions "this is my salt"
                    expected = "NkK9"
                    result = HI.toText hid
                in expected @=? result
+
 decodeNumber :: Assertion
 decodeNumber = let options = HI.defaultOptions "this is my salt"
                    encoder = HI.mkEncoder options
