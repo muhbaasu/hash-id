@@ -8,12 +8,13 @@ import           Data.Maybe (fromMaybe)
 data HashOptions = HashOptions {
     optSalt          :: !Salt
   , optAlphabet      :: !Alphabet
-  , optMinHashLength :: !Int } deriving Show
+  , optMinHashLength :: !MinLength
+  } deriving Show
 
 -- Necessary data for encoding and decoding
 data HashEncoder = HashEncoder {
     encSalt          :: !Salt
-  , encMinHashLength :: !Int
+  , encMinHashLength :: !MinLength
   , encAlphabet      :: !Alphabet
   , encSeps          :: !Separators
   , encGuards        :: !Guards
@@ -21,16 +22,23 @@ data HashEncoder = HashEncoder {
 
 newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
 newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
+newtype MinLength = MinLength { unMinLength :: Int } deriving (Show, Eq)
 
 type Alphabet = String
 type Separators = String
 type Guards = String
 type Hashed = String
-type MinLength = Int
-type OptionErrors = String
+type Error = String
 
 -- TODO
-salt :: String -> Either String Salt
+minLength :: Int -> Either Error MinLength
+minLength = undefined
+
+satisfiesLength :: MinLength -> Int -> Bool
+satisfiesLength (MinLength minLen) l = l >= minLen
+
+-- TODO
+salt :: String -> Either Error Salt
 salt = undefined
 
 defaultAlphabet :: Alphabet
@@ -46,8 +54,8 @@ defaultSeps =
   let seps = "cfhistu"
   in seps ++ map toUpper seps
 
-defaultMinHashLength :: Int
-defaultMinHashLength = 0
+defaultMinHashLength :: MinLength
+defaultMinHashLength = MinLength 0
 
 defaultOptions :: Salt -> HashOptions
 defaultOptions salt' =
@@ -55,20 +63,17 @@ defaultOptions salt' =
     Right opt -> opt
     Left err -> error err -- library failure
 
-mkOptions :: Salt -> Alphabet -> MinLength -> Either OptionErrors HashOptions
-mkOptions salt' alphabet minLength =
+mkOptions :: Salt -> Alphabet -> MinLength -> Either Error HashOptions
+mkOptions salt' alphabet minLen =
   if length alphabet' < minAlphabetLength
      then Left $ "Alphabet must contain at least "
                  ++ show minAlphabetLength ++ " unique characters"
-     else Right $ HashOptions salt' alphabet' minLength'
+     else Right $ HashOptions salt' alphabet' minLen
   where minAlphabetLength = 16
         alphabet' = filter (/= ' ') $ nub alphabet
-        minLength' = if minLength < 0
-                        then 0
-                        else minLength
 
 mkEncoder :: HashOptions -> HashEncoder
-mkEncoder (HashOptions salt' alphabet minLength) =
+mkEncoder (HashOptions salt' alphabet minLen) =
   let seps = defaultSeps `intersect` alphabet
       alphabet' = alphabet \\ seps
       seps' = consistentShuffle seps salt'
@@ -93,7 +98,7 @@ mkEncoder (HashOptions salt' alphabet minLength) =
                 in (alphabet'', seps'''', guards')
            else let (guards', alphabet''''') = splitAt guardCount alphabet'''
                 in (alphabet''''', seps'', guards')
-  in HashEncoder salt' minLength alphabet'''' seps''' guards
+  in HashEncoder salt' minLen alphabet'''' seps''' guards
 
 sepDiv :: Double
 sepDiv = 3.5
@@ -104,12 +109,12 @@ guardDiv = 12
 type ReturnVal = String
 
 encode :: HashEncoder -> [Int] -> HashId
-encode (HashEncoder salt' minLength alphabet seps guards) nums =
+encode (HashEncoder salt' minLen alphabet seps guards) nums =
   let hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
       ret = alphabet !! (hash' `mod` length alphabet)
       (alphabet', retVal) = encodeStep1 ret alphabet salt' seps nums
-      retVal' = encodeStep2 hash' guards minLength retVal
-      retVal'' = encodeStep3 alphabet' minLength retVal'
+      retVal' = encodeStep2 hash' guards minLen retVal
+      retVal'' = encodeStep3 alphabet' minLen retVal'
   in HashId retVal''
 
 encodeStep1 :: Char
@@ -122,7 +127,7 @@ encodeStep1 char alphabet salt' seps nums =
   foldl' foldStep (alphabet, [char]) ns
   where ns = zip [0..] nums
         foldStep (alphabet', retVal) (i, n) =
-          let buffer = char : (unSalt salt') ++ alphabet'
+          let buffer = char : unSalt salt' ++ alphabet'
               alphabet'' = consistentShuffle alphabet' $ Salt
                            $ take (length alphabet') buffer
               lastC = hash alphabet'' n
@@ -135,34 +140,35 @@ encodeStep1 char alphabet salt' seps nums =
                             else retVal'
           in (alphabet'', retVal'')
 
-encodeStep2 :: Int -> Guards -> Int -> ReturnVal -> ReturnVal
-encodeStep2 hash' guards minLength retVal =
-  if length retVal < minLength
-     then
+encodeStep2 :: Int -> Guards -> MinLength -> ReturnVal -> ReturnVal
+encodeStep2 hash' guards minLen retVal =
+  if satisfiesLength minLen $ length retVal
+     then retVal
+     else
        let guardIndex = hash' + ord (head retVal)
            guard = guards !! guardIndex
            retVal' = guard:retVal
-       in if length retVal' < minLength
-             then
+       in if satisfiesLength minLen $ length retVal'
+             then retVal'
+             else
                let guardIndex' = (hash' + ord (retVal' !! 2)) `mod` length guards
                    guard' = guards !! guardIndex'
                in retVal' ++ [guard']
-             else retVal'
-     else retVal
 
-encodeStep3 :: Alphabet -> Int -> ReturnVal -> ReturnVal
-encodeStep3 alphabet minLength retVal =
-  if length retVal < minLength
-     then
+encodeStep3 :: Alphabet -> MinLength -> ReturnVal -> ReturnVal
+encodeStep3 alphabet minLen retVal =
+  if satisfiesLength minLen $ length retVal
+     then retVal
+     else
        let alphabet' = consistentShuffle alphabet $ Salt alphabet
            retVal' = drop halfLen alphabet' ++ retVal ++ take halfLen alphabet'
-           excess = length retVal' - minLength
+           excess = length retVal' - unMinLength minLen
            retVal'' = if excess > 0
                          then let startPos = excess `div` 2
-                              in take (startPos + minLength) $ drop startPos retVal'
+                              in take (startPos + unMinLength minLen)
+                                 $ drop startPos retVal'
                          else retVal'
-       in encodeStep3 alphabet' minLength retVal''
-     else retVal
+       in encodeStep3 alphabet' minLen retVal''
   where halfLen = length alphabet `div` 2
 
 decode :: HashEncoder -> HashId -> [Int]
