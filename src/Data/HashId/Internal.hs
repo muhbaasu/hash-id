@@ -24,6 +24,7 @@ newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
 newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
 newtype MinLength = MinLength { unMinLength :: Int } deriving (Show, Eq)
 newtype Alphabet = Alphabet { unAlpha :: String } deriving (Show, Eq)
+newtype Positive = Positive { unPositive :: Int } deriving (Show, Eq)
 
 type Separators = String
 type Guards = String
@@ -48,6 +49,11 @@ alphabet a =
 
 minAlphabetLength :: Int
 minAlphabetLength = 16
+
+positive :: Int -> Maybe Positive
+positive n = if n < 0
+                 then Nothing
+                 else Just (Positive n)
 
 -- TODO
 salt :: String -> Either Error Salt
@@ -112,9 +118,11 @@ guardDiv = 12
 
 type ReturnVal = String
 
-encode :: HashEncoder -> [Int] -> HashId
-encode (HashEncoder salt' minLen a@(Alphabet alpha) seps guards) nums =
-  let hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
+encode :: HashEncoder -> [Positive] -> HashId
+encode (HashEncoder salt' minLen a@(Alphabet alpha) seps guards) vnums =
+  let
+      nums = map (unPositive) vnums
+      hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
       ret = alpha !! (hash' `mod` length alpha)
       (alphabet', retVal) = encodeStep1 ret a salt' seps nums
       retVal' = encodeStep2 hash' guards minLen retVal
@@ -175,14 +183,14 @@ encodeStep3 (Alphabet alpha) minLen retVal =
        in encodeStep3 (Alphabet alpha') minLen retVal''
   where halfLen = length alpha `div` 2
 
-decode :: HashEncoder -> HashId -> [Int]
+decode :: HashEncoder -> HashId -> [Positive]
 decode enc@(HashEncoder salt' _ (Alphabet alpha) seps guards) hashId =
   let hashBreakdown = words $ map (toSpace guards) $ unHashId hashId
       i = if length hashBreakdown `elem` [2, 3] then 1 else 0
       hashBreakdown' = hashBreakdown !! i
       lottery = head hashBreakdown'
       hashBreakdown'' = words $ map (toSpace seps) $ tail hashBreakdown'
-      ret = fst $ foldl' (collectVals lottery) ([], alpha) hashBreakdown''
+      ret = map Positive $ fst $ foldl' (collectVals lottery) ([], alpha) hashBreakdown''
   in if unHashId (encode enc ret) == unHashId hashId
         then ret
         else []

@@ -28,10 +28,18 @@ instance Arbitrary HI.HashEncoder where
 instance Arbitrary HI.Alphabet where
   arbitrary = return HI.defaultAlphabet
 
-prop_idempotent_encode :: HI.HashEncoder -> [Int] -> Bool
+positiveIntGen :: Gen (Positive Int)
+positiveIntGen = arbitrary
+
+instance Arbitrary HI.Positive where
+  arbitrary = do
+    (Positive pos) <- positiveIntGen
+    return $ HI.Positive pos
+
+prop_idempotent_encode :: HI.HashEncoder -> [HI.Positive] -> Bool
 prop_idempotent_encode enc nums = HI.encode enc nums == HI.encode enc nums
 
-decodeReversesEncode :: HI.HashEncoder -> [Int] -> Bool
+decodeReversesEncode :: HI.HashEncoder -> [HI.Positive] -> Bool
 decodeReversesEncode enc nums = let encoded = HI.encode enc nums
                                     decoded = HI.decode enc encoded
                                 in decoded == nums

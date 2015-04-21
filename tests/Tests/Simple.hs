@@ -26,7 +26,7 @@ consistentShuffleABC2 =
 encodeNumber :: Assertion
 encodeNumber = let options = HI.defaultOptions $ HI.Salt "this is my salt"
                    encoder = HI.mkEncoder options
-                   hid = HI.encode encoder [12345]
+                   hid = HI.encode encoder [HI.Positive 12345]
                    expected = "NkK9"
                    result = HI.toText hid
                in expected @=? result
@@ -35,7 +35,7 @@ decodeNumber :: Assertion
 decodeNumber = let options = HI.defaultOptions $ HI.Salt "this is my salt"
                    encoder = HI.mkEncoder options
                    hid = fromJust $ HI.parse encoder "NkK9"
-                   expected = [12345]
+                   expected = [HI.Positive 12345]
                    result = HI.decode encoder hid
                in expected @=? result
 

@@ -4,15 +4,16 @@ module Data.HashId
          HashId
        , HashEncoder
        , HashOptions
+       , Positive
        , Salt
 
        -- * Core functions
        , defaultOptions
-       , mkOptions
        , mkEncoder
        , encode
        , decode
        , parse
+       , positive
        , toText
        ) where
 
