@@ -5,6 +5,7 @@ module Tests.Properties
          tests
        ) where
 
+import           Data.Either                          (isLeft, isRight)
 import qualified Data.HashId.Internal                 as HI
 import qualified Test.Framework                       as F
 import qualified Test.Framework.Providers.QuickCheck2 as F
@@ -39,6 +40,10 @@ instance Arbitrary HI.Positive where
 prop_idempotent_encode :: HI.HashEncoder -> [HI.Positive] -> Bool
 prop_idempotent_encode enc nums = HI.encode enc nums == HI.encode enc nums
 
+prop_positive :: Int -> Bool
+prop_positive n | n < 0 = isLeft $ HI.positive n
+prop_positive n = isRight $ HI.positive n
+
 decodeReversesEncode :: HI.HashEncoder -> [HI.Positive] -> Bool
 decodeReversesEncode enc nums = let encoded = HI.encode enc nums
                                     decoded = HI.decode enc encoded
@@ -54,4 +59,5 @@ tests =
   [ F.testProperty "Idempotent encode" prop_idempotent_encode
   , F.testProperty "decode reverses encode" decodeReversesEncode
   , F.testProperty "unhash reverses hash" unhashReversesHash
+  , F.testProperty "validate positive" prop_positive
   ]

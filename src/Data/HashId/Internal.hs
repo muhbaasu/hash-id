@@ -50,10 +50,9 @@ alphabet a =
 minAlphabetLength :: Int
 minAlphabetLength = 16
 
-positive :: Int -> Maybe Positive
-positive n = if n < 0
-                 then Nothing
-                 else Just (Positive n)
+positive :: Int -> Either Error Positive
+positive n | n < 0 = Left "Must be greater than 0"
+positive n = Right $ Positive n
 
 -- TODO
 salt :: String -> Either Error Salt
