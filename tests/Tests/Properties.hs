@@ -5,8 +5,8 @@ module Tests.Properties
          tests
        ) where
 
-import           Data.Either                          (isLeft, isRight)
 import qualified Data.HashId.Internal                 as HI
+import           Numeric.Natural
 import qualified Test.Framework                       as F
 import qualified Test.Framework.Providers.QuickCheck2 as F
 import           Test.QuickCheck
@@ -32,24 +32,20 @@ instance Arbitrary HI.Alphabet where
 positiveIntGen :: Gen (Positive Int)
 positiveIntGen = arbitrary
 
-instance Arbitrary HI.Positive where
+instance Arbitrary Natural where
   arbitrary = do
     (Positive pos) <- positiveIntGen
-    return $ HI.Positive pos
+    return $ fromIntegral pos
 
-prop_idempotent_encode :: HI.HashEncoder -> [HI.Positive] -> Bool
+prop_idempotent_encode :: HI.HashEncoder -> [Natural] -> Bool
 prop_idempotent_encode enc nums = HI.encode enc nums == HI.encode enc nums
 
-prop_positive :: Int -> Bool
-prop_positive n | n < 0 = isLeft $ HI.positive n
-prop_positive n = isRight $ HI.positive n
-
-decodeReversesEncode :: HI.HashEncoder -> [HI.Positive] -> Bool
+decodeReversesEncode :: HI.HashEncoder -> [Natural] -> Bool
 decodeReversesEncode enc nums = let encoded = HI.encode enc nums
                                     decoded = HI.decode enc encoded
                                 in decoded == nums
 
-unhashReversesHash :: HI.Alphabet -> Int -> Bool
+unhashReversesHash :: HI.Alphabet -> Natural -> Bool
 unhashReversesHash alphabet num = let hashed = HI.hash alphabet num
                                   in HI.unhash alphabet hashed == num
 
@@ -59,5 +55,4 @@ tests =
   [ F.testProperty "Idempotent encode" prop_idempotent_encode
   , F.testProperty "decode reverses encode" decodeReversesEncode
   , F.testProperty "unhash reverses hash" unhashReversesHash
-  , F.testProperty "validate positive" prop_positive
   ]

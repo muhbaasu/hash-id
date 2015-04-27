@@ -1,8 +1,9 @@
 module Data.HashId.Internal where
 
-import           Data.Char  (ord, toUpper)
-import           Data.List  (elemIndex, foldl', intersect, nub, (\\))
-import           Data.Maybe (fromMaybe)
+import           Data.Char       (ord, toUpper)
+import           Data.List       (elemIndex, foldl', intersect, nub, (\\))
+import           Data.Maybe      (fromMaybe)
+import           Numeric.Natural
 
 -- Options for creating encoders
 data HashOptions = HashOptions {
@@ -24,12 +25,14 @@ newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
 newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
 newtype MinLength = MinLength { unMinLength :: Int } deriving (Show, Eq)
 newtype Alphabet = Alphabet { unAlpha :: String } deriving (Show, Eq)
-newtype Positive = Positive { unPositive :: Int } deriving (Show, Eq)
 
 type Separators = String
 type Guards = String
 type Hashed = String
 type Error = String
+
+(!!!) :: [a] -> Natural -> a
+(!!!) xs n = xs !! fromIntegral n
 
 minLength :: Int -> Either Error MinLength
 minLength l | l < 0 = Left ""
@@ -49,10 +52,6 @@ alphabet a =
 
 minAlphabetLength :: Int
 minAlphabetLength = 16
-
-positive :: Int -> Either Error Positive
-positive n | n < 0 = Left "Must be greater than 0"
-positive n = Right $ Positive n
 
 salt :: String -> Either Error Salt
 salt s =
@@ -122,12 +121,12 @@ guardDiv = 12
 
 type ReturnVal = String
 
-encode :: HashEncoder -> [Positive] -> HashId
-encode (HashEncoder salt' minLen a@(Alphabet alpha) seps guards) vnums =
+encode :: HashEncoder -> [Natural] -> HashId
+encode (HashEncoder salt' minLen a@(Alphabet alpha) seps guards) nums =
   let
-      nums = map (unPositive) vnums
       hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
-      ret = alpha !! (hash' `mod` length alpha)
+      lenalpha = fromIntegral $ length alpha
+      ret = alpha !!! (hash' `mod` lenalpha)
       (alphabet', retVal) = encodeStep1 ret a salt' seps nums
       retVal' = encodeStep2 hash' guards minLen retVal
       retVal'' = encodeStep3 alphabet' minLen retVal'
@@ -137,7 +136,7 @@ encodeStep1 :: Char
                 -> Alphabet
                 -> Salt
                 -> Separators
-                -> [Int]
+                -> [Natural]
                 -> (Alphabet, ReturnVal)
 encodeStep1 char alpha salt' seps nums =
   foldl' foldStep (alpha, [char]) ns
@@ -148,27 +147,30 @@ encodeStep1 char alpha salt' seps nums =
                            $ take (length alpha') buffer
               lastC = hash (Alphabet alphabet'') n
               retVal' = retVal ++ lastC
-              retVal'' = if i + 1 < length nums
+              lennums = fromIntegral $ length nums
+              retVal'' = if i + 1 < lennums
                             then
-                              let n' = n `mod` ord (head lastC) + i
-                                  sepsIndex = n' `mod` length seps
-                              in retVal' ++ [seps !! sepsIndex]
+                              let n' = n `mod` (fromIntegral $ ord (head lastC) + i)
+                                  lenseps = fromIntegral $ length seps
+                                  sepsIndex = n' `mod` lenseps
+                              in retVal' ++ [seps !!! sepsIndex]
                             else retVal'
           in ((Alphabet alphabet''), retVal'')
 
-encodeStep2 :: Int -> Guards -> MinLength -> ReturnVal -> ReturnVal
+encodeStep2 :: Natural -> Guards -> MinLength -> ReturnVal -> ReturnVal
 encodeStep2 hash' guards minLen retVal =
   if satisfiesLength minLen $ length retVal
      then retVal
      else
-       let guardIndex = hash' + ord (head retVal)
-           guard = guards !! guardIndex
+       let guardIndex = hash' + (fromIntegral $ ord (head retVal))
+           guard = guards !!! guardIndex
            retVal' = guard:retVal
        in if satisfiesLength minLen $ length retVal'
              then retVal'
              else
-               let guardIndex' = (hash' + ord (retVal' !! 2)) `mod` length guards
-                   guard' = guards !! guardIndex'
+               let lenguards = fromIntegral $ length guards
+                   guardIndex' = (hash' + (fromIntegral $ ord (retVal' !!! 2))) `mod` lenguards
+                   guard' = guards !!! guardIndex'
                in retVal' ++ [guard']
 
 encodeStep3 :: Alphabet -> MinLength -> ReturnVal -> ReturnVal
@@ -187,14 +189,14 @@ encodeStep3 (Alphabet alpha) minLen retVal =
        in encodeStep3 (Alphabet alpha') minLen retVal''
   where halfLen = length alpha `div` 2
 
-decode :: HashEncoder -> HashId -> [Positive]
+decode :: HashEncoder -> HashId -> [Natural]
 decode enc@(HashEncoder salt' _ (Alphabet alpha) seps guards) hashId =
   let hashBreakdown = words $ map (toSpace guards) $ unHashId hashId
       i = if length hashBreakdown `elem` [2, 3] then 1 else 0
       hashBreakdown' = hashBreakdown !! i
       lottery = head hashBreakdown'
       hashBreakdown'' = words $ map (toSpace seps) $ tail hashBreakdown'
-      ret = map Positive $ fst $ foldl' (collectVals lottery) ([], alpha) hashBreakdown''
+      ret = fst $ foldl' (collectVals lottery) ([], alpha) hashBreakdown''
   in if unHashId (encode enc ret) == unHashId hashId
         then ret
         else []
@@ -215,26 +217,26 @@ parse _ s = Just $ HashId s
 toText :: HashId -> String
 toText = unHashId
 
-hash :: Alphabet -> Int -> Hashed
+hash :: Alphabet -> Natural -> Hashed
 hash (Alphabet alpha) num = hash' num alpha ""
   where
     hash' i a output =
       if i > 0
-         then let aLen = length a
-                  newOut = (a !! (i `mod` aLen)) : output
+         then let aLen = fromIntegral $ length a
+                  newOut = (a !!! (i `mod` aLen)) : output
               in hash' (i `div` aLen) a newOut
       else output
 
-unhash :: Alphabet -> Hashed -> Int
+unhash :: Alphabet -> Hashed -> Natural
 unhash (Alphabet alpha) hash' = unhash' 0 0
   where
     unhash' i num =
-      if i >= length hash'
+      if i >= (fromIntegral $ length hash')
          then num
-         else let cur = hash' !! i
-                  pos = fromMaybe (-1) $ elemIndex cur alpha
-                  hashLen = length hash'
-                  power = length alpha ^ (hashLen - i - 1)
+         else let cur = hash' !!! i
+                  pos = fromIntegral $  fromMaybe (-1) $ elemIndex cur alpha
+                  hashLen = fromIntegral $ length hash'
+                  power = fromIntegral $ length alpha ^ (hashLen - i - 1)
                   num' = num + pos * power
               in unhash' (i + 1) num'
 
