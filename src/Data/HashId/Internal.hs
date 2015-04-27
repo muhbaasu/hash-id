@@ -54,9 +54,14 @@ positive :: Int -> Either Error Positive
 positive n | n < 0 = Left "Must be greater than 0"
 positive n = Right $ Positive n
 
--- TODO
 salt :: String -> Either Error Salt
-salt = undefined
+salt s =
+  case sanitize s of
+    s' | isValid s' -> Right $ Salt s'
+    _ -> Left $ "Only characters in '" ++ validChars ++ "' are allowed"
+  where sanitize = filter (' ' /=) . nub
+        isValid = all $ flip elem validChars
+        validChars = ['a'..'z'] ++ ['A'..'Z']
 
 defaultAlphabet :: Alphabet
 defaultAlphabet =
