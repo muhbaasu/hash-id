@@ -4,7 +4,6 @@ module Data.HashId
          HashId
        , HashEncoder
        , HashOptions
-       , Positive
        , Salt
 
        -- * Core functions
@@ -13,8 +12,8 @@ module Data.HashId
        , encode
        , decode
        , parse
-       , positive
        , toText
+       , salt
        ) where
 
 import           Data.HashId.Internal
