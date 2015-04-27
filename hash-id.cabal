@@ -17,14 +17,14 @@ extra-source-files:  .travis.yml
                      .gitignore
                      LICENSE
                      README.md
-   
+
 source-repository head
   type: git
-  location: git://github.com/muhbaasu/hash-id.git               
+  location: git://github.com/muhbaasu/hash-id.git
 
 library
   exposed-modules:     Data.HashId
-  
+
   build-depends:       base >=4.8 && <4.9
   hs-source-dirs:      src
   default-language:    Haskell98
