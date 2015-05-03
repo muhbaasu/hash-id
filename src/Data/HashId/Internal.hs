@@ -1,9 +1,25 @@
+{-# LANGUAGE DataKinds #-}
+
 module Data.HashId.Internal where
 
 import           Data.Char       (ord, toUpper)
 import           Data.List       (elemIndex, foldl', intersect, nub, (\\))
 import           Data.Maybe      (fromMaybe)
 import           Numeric.Natural
+import           Refined         (EqualTo, GreaterThan, Or, Refined, refine,
+                                  unrefine)
+
+type Positive = Or (EqualTo 0) (GreaterThan 0)
+type MinLength = Refined Positive Int
+
+newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
+newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
+newtype Alphabet = Alphabet { unAlpha :: String } deriving (Show, Eq)
+
+type Separators = String
+type Guards = String
+type Hashed = String
+type Error = String
 
 -- Options for creating encoders
 data HashOptions = HashOptions {
@@ -21,25 +37,11 @@ data HashEncoder = HashEncoder {
   , encGuards        :: !Guards
   } deriving Show
 
-newtype HashId = HashId { unHashId :: String } deriving (Show, Eq)
-newtype Salt = Salt { unSalt :: String } deriving (Show, Eq)
-newtype MinLength = MinLength { unMinLength :: Int } deriving (Show, Eq)
-newtype Alphabet = Alphabet { unAlpha :: String } deriving (Show, Eq)
-
-type Separators = String
-type Guards = String
-type Hashed = String
-type Error = String
-
 (!!!) :: [a] -> Natural -> a
 (!!!) xs n = xs !! fromIntegral n
 
-minLength :: Int -> Either Error MinLength
-minLength l | l < 0 = Left ""
-minLength l = Right $ MinLength l
-
 satisfiesLength :: MinLength -> Int -> Bool
-satisfiesLength (MinLength minLen) = (<=) minLen
+satisfiesLength minLen = (<=) $ unrefine minLen
 
 alphabet :: String -> Either Error Alphabet
 alphabet a =
@@ -76,7 +78,7 @@ defaultSeps =
   in seps ++ map toUpper seps
 
 defaultMinHashLength :: MinLength
-defaultMinHashLength = MinLength 0
+defaultMinHashLength = either error id $ refine 0
 
 defaultOptions :: Salt -> HashOptions
 defaultOptions salt' =
@@ -180,10 +182,10 @@ encodeStep3 (Alphabet alpha) minLen retVal =
      else
        let alpha' = consistentShuffle alpha $ Salt alpha
            retVal' = drop halfLen alpha' ++ retVal ++ take halfLen alpha'
-           excess = length retVal' - unMinLength minLen
+           excess = length retVal' - unrefine minLen
            retVal'' = if excess > 0
                          then let startPos = excess `div` 2
-                              in take (startPos + unMinLength minLen)
+                              in take (startPos + unrefine minLen)
                                  $ drop startPos retVal'
                          else retVal'
        in encodeStep3 (Alphabet alpha') minLen retVal''
