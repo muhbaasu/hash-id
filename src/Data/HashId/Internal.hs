@@ -3,7 +3,8 @@
 module Data.HashId.Internal where
 
 import           Data.Char       (ord, toUpper)
-import           Data.List       (elemIndex, foldl', intersect, nub, (\\))
+import           Data.List       (elemIndex, foldl', genericIndex,
+                                  genericLength, intersect, nub, (\\))
 import           Data.Maybe      (fromMaybe)
 import           Numeric.Natural
 import           Refined         (EqualTo, GreaterThan, Or, Refined, refine,
@@ -36,9 +37,6 @@ data HashEncoder = HashEncoder {
   , encSeps          :: !Separators
   , encGuards        :: !Guards
   } deriving Show
-
-(!!!) :: [a] -> Natural -> a
-(!!!) xs n = xs !! fromIntegral n
 
 satisfiesLength :: MinLength -> Int -> Bool
 satisfiesLength minLen = (<=) $ unrefine minLen
@@ -92,10 +90,10 @@ mkEncoder (HashOptions salt' (Alphabet alpha) minLen) =
   let seps = defaultSeps `intersect` alpha
       alphabet' = alpha \\ seps
       seps' = consistentShuffle seps salt'
-      divCoeff = fromIntegral (length alpha) / fromIntegral (length seps')
+      divCoeff = genericLength alpha / genericLength seps'
       (seps'', alphabet'') =
         if seps' == "" || divCoeff > sepDiv
-           then let sepsLen = ceiling $ fromIntegral (length alphabet') / sepDiv
+           then let sepsLen = ceiling $ genericLength alphabet' / sepDiv
                     sepsLen' = if sepsLen == 1
                                   then sepsLen + 1
                                   else sepsLen
@@ -106,7 +104,7 @@ mkEncoder (HashOptions salt' (Alphabet alpha) minLen) =
                       else (take sepsLen' seps', alphabet')
            else (alphabet', seps')
       alphabet''' = consistentShuffle alphabet'' salt'
-      guardCount = ceiling $ fromIntegral (length alphabet''') / guardDiv
+      guardCount = ceiling $ genericLength alphabet''' / guardDiv
       (alphabet'''', seps''', guards) =
         if length alphabet'' < 3
            then let (guards', seps'''') = splitAt guardCount seps''
@@ -127,8 +125,8 @@ encode :: HashEncoder -> [Natural] -> HashId
 encode (HashEncoder salt' minLen a@(Alphabet alpha) seps guards) nums =
   let
       hash' = sum $ map (\(i, n) -> n `mod` (i+100)) $ zip [0..] nums
-      lenalpha = fromIntegral $ length alpha
-      ret = alpha !!! (hash' `mod` lenalpha)
+      lenalpha = genericLength alpha
+      ret = alpha `genericIndex` (hash' `mod` lenalpha)
       (alphabet', retVal) = encodeStep1 ret a salt' seps nums
       retVal' = encodeStep2 hash' guards minLen retVal
       retVal'' = encodeStep3 alphabet' minLen retVal'
@@ -143,36 +141,36 @@ encodeStep1 :: Char
 encodeStep1 char alpha salt' seps nums =
   foldl' foldStep (alpha, [char]) ns
   where ns = zip [0..] nums
-        foldStep ((Alphabet alpha'), retVal) (i, n) =
+        foldStep (Alphabet alpha', retVal) (i, n) =
           let buffer = char : unSalt salt' ++ alpha'
               alphabet'' = consistentShuffle alpha' $ Salt
                            $ take (length alpha') buffer
               lastC = hash (Alphabet alphabet'') n
               retVal' = retVal ++ lastC
-              lennums = fromIntegral $ length nums
+              lennums = genericLength nums
               retVal'' = if i + 1 < lennums
                             then
-                              let n' = n `mod` (fromIntegral $ ord (head lastC) + i)
-                                  lenseps = fromIntegral $ length seps
+                              let n' = n `mod` fromIntegral (ord (head lastC) + i)
+                                  lenseps = genericLength seps
                                   sepsIndex = n' `mod` lenseps
-                              in retVal' ++ [seps !!! sepsIndex]
+                              in retVal' ++ [seps `genericIndex` sepsIndex]
                             else retVal'
-          in ((Alphabet alphabet''), retVal'')
+          in (Alphabet alphabet'', retVal'')
 
 encodeStep2 :: Natural -> Guards -> MinLength -> ReturnVal -> ReturnVal
 encodeStep2 hash' guards minLen retVal =
   if satisfiesLength minLen $ length retVal
      then retVal
      else
-       let guardIndex = hash' + (fromIntegral $ ord (head retVal))
-           guard = guards !!! guardIndex
+       let guardIndex = hash' + fromIntegral (ord (head retVal))
+           guard = guards `genericIndex` guardIndex
            retVal' = guard:retVal
        in if satisfiesLength minLen $ length retVal'
              then retVal'
              else
-               let lenguards = fromIntegral $ length guards
-                   guardIndex' = (hash' + (fromIntegral $ ord (retVal' !!! 2))) `mod` lenguards
-                   guard' = guards !!! guardIndex'
+               let lenguards = genericLength guards
+                   guardIndex' = (hash' + fromIntegral (ord (retVal' `genericIndex` 2))) `mod` lenguards
+                   guard' = guards `genericIndex` guardIndex'
                in retVal' ++ [guard']
 
 encodeStep3 :: Alphabet -> MinLength -> ReturnVal -> ReturnVal
@@ -224,8 +222,8 @@ hash (Alphabet alpha) num = hash' num alpha ""
   where
     hash' i a output =
       if i > 0
-         then let aLen = fromIntegral $ length a
-                  newOut = (a !!! (i `mod` aLen)) : output
+         then let aLen = genericLength a
+                  newOut = (a `genericIndex` (i `mod` aLen)) : output
               in hash' (i `div` aLen) a newOut
       else output
 
@@ -233,12 +231,12 @@ unhash :: Alphabet -> Hashed -> Natural
 unhash (Alphabet alpha) hash' = unhash' 0 0
   where
     unhash' i num =
-      if i >= (fromIntegral $ length hash')
+      if i >= genericLength hash'
          then num
-         else let cur = hash' !!! i
-                  pos = fromIntegral $  fromMaybe (-1) $ elemIndex cur alpha
-                  hashLen = fromIntegral $ length hash'
-                  power = fromIntegral $ length alpha ^ (hashLen - i - 1)
+         else let cur = hash' `genericIndex` i
+                  pos = fromIntegral $ fromMaybe (-1) $ elemIndex cur alpha
+                  hashLen = genericLength hash'
+                  power = genericLength alpha ^ (hashLen - i - 1)
                   num' = num + pos * power
               in unhash' (i + 1) num'
 
